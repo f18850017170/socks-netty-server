@@ -4,25 +4,36 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.sctp.nio.NioSctpServerChannel;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpRequestDecoder;
+import io.netty.handler.codec.http.HttpRequestEncoder;
 
 public class SocksNettyServer {
     public void start() {
         ServerBootstrap serverBootstrap = new ServerBootstrap();
         serverBootstrap.group(new NioEventLoopGroup(1), new NioEventLoopGroup())
-                .channel(NioSctpServerChannel.class)
-                .option(ChannelOption.SO_KEEPALIVE,true).option(ChannelOption.CONNECT_TIMEOUT_MILLIS,30000)
+                .channel(NioServerSocketChannel.class)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS,30000)
                 .childHandler(new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) throws Exception {
+                //inBound handlers
                 ch.pipeline().addFirst(new InMsgDecrypt())
                         .addLast(new HttpRequestDecoder())
                         .addLast(new DirectConnectionHandler());
 
+//                //outBound handler
+//                ch.pipeline().addFirst(new HttpResponseEncoder());
+
             }
         });
+        try {
+            System.out.println("启动 socksNettyServer ,监听端口：2081");
+            serverBootstrap.bind(2081).sync().channel().closeFuture().sync();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
 
     }
