@@ -3,14 +3,6 @@ package cn.vonfly;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpResponseDecoder;
-import io.netty.handler.codec.http.HttpVersion;
-import org.apache.commons.net.util.Charsets;
-
-import java.net.URI;
-import java.nio.charset.Charset;
 
 /**
  * 消息解密处理

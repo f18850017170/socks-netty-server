@@ -1,31 +1,48 @@
 package cn.vonfly;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.bootstrap.BootstrapConfig;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.socks.SocksAddressType;
+import io.netty.util.CharsetUtil;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import java.net.InetAddress;
-import java.net.URI;
 
-public class DirectConnectionHandler extends SimpleChannelInboundHandler<HttpMessage> {
+public class DirectConnectionHandler extends SimpleChannelInboundHandler<Object> {
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, HttpMessage msg) throws Exception {
-        DefaultHttpRequest defaultHttpRequest = (DefaultHttpRequest) msg;
-        HttpMethod method = defaultHttpRequest.method();
-        String uri = defaultHttpRequest.uri();
-        String host = defaultHttpRequest.headers().get(HttpHeaderNames.HOST);
+    protected void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
+        ByteBuf byteBuf = (ByteBuf) msg;
+        byte addressType = byteBuf.readByte();
+        SocksAddressType socksAddressType = SocksAddressType.valueOf(addressType);
+        int port;
+        String host = null;
+        switch (socksAddressType) {
+            case IPv4:
+                host = SocksCommonUtils.intToIp(byteBuf.readInt());
+                break;
+            case DOMAIN:
+                byte len = byteBuf.readByte();
+                host = byteBuf.toString(byteBuf.readerIndex(), len, CharsetUtil.US_ASCII);
+                byteBuf.skipBytes(len);
+                break;
+            case IPv6:
+                byte[] bytes = new byte[16];
+                byteBuf.readBytes(bytes);
+                host = SocksCommonUtils.ipv6toStr(bytes);
+                break;
+        }
+        port = byteBuf.readUnsignedShort();
         final Channel channel = ctx.channel();
-        ReferenceCountUtil.retain(defaultHttpRequest);
+        ReferenceCountUtil.retain(byteBuf);
         Bootstrap bootstrap = new Bootstrap();
-        NioEventLoopGroup eventLoopGroup = new NioEventLoopGroup();
+        final ByteBuf defaultHttpRequest = byteBuf.readBytes(byteBuf.readableBytes());
+        final NioEventLoopGroup eventLoopGroup = new NioEventLoopGroup();
         bootstrap.group(eventLoopGroup)
                 .channel(NioSocketChannel.class)
                 .option(ChannelOption.SO_KEEPALIVE, true)
@@ -39,15 +56,15 @@ public class DirectConnectionHandler extends SimpleChannelInboundHandler<HttpMes
                         ch.pipeline().addLast(new ProxyRelayingChannelHandler(channel));
                     }
                 });
-        InetAddress byName = InetAddress.getByName(host);
-        bootstrap.connect(byName, 80).addListener(new GenericFutureListener<ChannelFuture>() {
+        final InetAddress byName = InetAddress.getByName(host);
+        bootstrap.connect(host, port).addListener(new GenericFutureListener<ChannelFuture>() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
                 if (future.isSuccess()) {
                     future.channel().writeAndFlush(defaultHttpRequest);
                 } else {
                     future.cause().printStackTrace();
-                    System.out.println("连接远程服务器失败"+byName);
+                    System.out.println("连接远程服务器失败" + byName);
                     channel.close();
                     eventLoopGroup.shutdownGracefully();
                 }
