@@ -19,7 +19,7 @@ public class SocksNettyServer {
                 //inBound handlers
                 ch.pipeline()
 //                        .addLast(new HttpRequestDecoder())
-                        .addLast(new DirectConnectionHandler());
+                        .addLast(new ConnectDstHandler());
 
 //                //outBound handler
 //                ch.pipeline().addFirst(new HttpResponseEncoder());
@@ -32,7 +32,6 @@ public class SocksNettyServer {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
-
     }
+
 }
