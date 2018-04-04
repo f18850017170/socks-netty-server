@@ -5,6 +5,9 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 
+/**
+ * 信息流 DST->proxy
+ */
 public class ProxyRelayingChannelHandler extends SimpleChannelInboundHandler<ByteBuf> {
     private Channel channel;
 

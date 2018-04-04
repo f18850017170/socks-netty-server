@@ -17,9 +17,11 @@ import java.net.InetAddress;
 
 /**
  * 连接到目标地址dst
+ * 信息流 client-> proxy
+ * 执行操作 建立连接 proxy->dst
  */
 public class ConnectDstHandler extends SimpleChannelInboundHandler<ByteBuf> {
-    private static final byte SHAKE_HAND_SUCC = 0x07;
+    private static final byte SHAKE_HAND_SUCC = 0x07;//默认成功code
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf byteBuf) throws Exception {
@@ -60,7 +62,7 @@ public class ConnectDstHandler extends SimpleChannelInboundHandler<ByteBuf> {
         }
 
         final int port = byteBuf.readUnsignedShort();
-        System.out.println(Thread.currentThread().getName() + "接受请求,dest.host=" + host + ",dest.port=" + port + ",请求数据len=" + byteBuf.readableBytes() + ",dst.address.info.len=" + byteBuf.readerIndex());
+        System.out.println(Thread.currentThread().getName() + "client连接认证请求,dest.host=" + host + ",dest.port=" + port + ",请求数据len=" + byteBuf.readableBytes() + ",dst.address.info.len=" + byteBuf.readerIndex());
         final Channel client2ProxyServerChannel = ctx.channel();//客户单连接到代理服务器的channel
         ReferenceCountUtil.retain(byteBuf);
         Bootstrap bootstrap = new Bootstrap();
@@ -85,12 +87,12 @@ public class ConnectDstHandler extends SimpleChannelInboundHandler<ByteBuf> {
             public void operationComplete(ChannelFuture future) throws Exception {
                 //连接到dst的future
                 if (future.isSuccess()) {
+                    System.out.println("连接DST远程服务器成功" + byName + ",host=" + host);
                     //连接成功通过promise传递dstChannel
                     promise.setSuccess(future.channel());
-                    System.out.println(Thread.currentThread().getName() + "数据写入dst.address.channel,len=");
                 } else {
                     future.cause().printStackTrace();
-                    System.out.println("连接远程服务器失败" + byName + ",host=" + host);
+                    System.out.println("连接DST远程服务器失败" + byName + ",host=" + host);
                     client2ProxyServerChannel.close();
                 }
             }
@@ -100,22 +102,26 @@ public class ConnectDstHandler extends SimpleChannelInboundHandler<ByteBuf> {
             @Override
             public void operationComplete(Future<Channel> future) throws Exception {
                 if (future.isSuccess()) {
-                    Channel dstChannel = future.getNow();
+                    final Channel proxy2DstChannel = future.getNow();
                     //TODO 此时移除，不能保证已有其他请求已传输到该handler并且被处理过，导致未知协议的出现
                     //TODO 传输DST地址内容，应该在连接建立时处理完成
                     client2ProxyServerChannel.pipeline().remove(ConnectDstHandler.class);
-                    client2ProxyServerChannel.pipeline().addFirst(new DirectConnectionHandler(dstChannel));
+                    //入栈信息处理链
+                    client2ProxyServerChannel.pipeline().addFirst(new InMsg2Decrypt());//解密
+                    client2ProxyServerChannel.pipeline().addLast(new DirectConnectionHandler(proxy2DstChannel));//写到dst
+
                     client2ProxyServerChannel.writeAndFlush(Unpooled.copiedBuffer(new byte[]{SHAKE_HAND_SUCC})).addListener(new GenericFutureListener<Future<? super Void>>() {
                         @Override
                         public void operationComplete(Future<? super Void> future) throws Exception {
                             if (future.isSuccess()) {
+                                //出站信息处理链
+                                client2ProxyServerChannel.pipeline().addFirst(new OutMsg2Encrypt());//加密
                                 System.out.println("确认握手协议=连接建立完毕===准备开始数据传输");
                             } else {
-
                                 System.out.println("确认握手协议失败连==关闭连接");
                                 future.cause().printStackTrace();
                                 client2ProxyServerChannel.close();
-                                dstChannel.close();
+                                proxy2DstChannel.close();
                             }
                         }
                     });

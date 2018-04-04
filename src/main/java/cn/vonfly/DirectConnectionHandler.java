@@ -5,6 +5,10 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 
+/**
+ * 信息流 client->proxy
+ * 执行操作proxy->dst
+ */
 public class DirectConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
     //连接到dst的channel
     private Channel out2DstSocketChannel;
