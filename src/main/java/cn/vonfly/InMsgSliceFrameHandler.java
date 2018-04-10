@@ -20,14 +20,15 @@ public class InMsgSliceFrameHandler extends ReplayingDecoder<InMsgSliceFrameHand
     private int frameLength = -1;
     private ByteBuf frameContent;
     private ByteBuf frameLenByteBuf = Unpooled.buffer(2);
-    private List<ByteBuf> frameContentList =new ArrayList<>();
+    private List<ByteBuf> frameContentList = new ArrayList<>();
+
     public InMsgSliceFrameHandler() {
         super(FRAME_START);
     }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-        int len = in.readableBytes();
+        int len = in.writerIndex() - in.readerIndex();
         if (len == 0) {
             return;
         }
@@ -54,14 +55,13 @@ public class InMsgSliceFrameHandler extends ReplayingDecoder<InMsgSliceFrameHand
                 break;
             }
             case FRAME_CONTENT: {
-                int readableBytes = in.readableBytes();
+                int readableBytes = in.writerIndex() - in.readerIndex();
                 if (readableBytes > 0) {
-                    int writerIndex = frameContent.writerIndex();
-                    int writeLength = frameLength - writerIndex - readableBytes;
-                    if (writeLength > 0) {
-                        frameContent.writeBytes(in, writeLength);
+                    int leftWriteLength = frameLength - frameContent.writerIndex();
+                    if (leftWriteLength > 0) {
+                        frameContent.writeBytes(in, leftWriteLength > readableBytes ? readableBytes : leftWriteLength);
                     }
-                    if (frameLength == frameContent.writerIndex()){
+                    if (frameLength == frameContent.writerIndex()) {
                         state(FRAME_FINISH);
                     }
                 }
@@ -71,7 +71,7 @@ public class InMsgSliceFrameHandler extends ReplayingDecoder<InMsgSliceFrameHand
                 frameContentList.add(frameContent);
                 state(FRAME_START);
                 frameLength = -1;
-                if (!in.isReadable()){
+                if (!in.isReadable()) {
                     out.addAll(frameContentList);
                     frameContentList.clear();
                 }
