@@ -108,6 +108,8 @@ public class ConnectDstHandler extends SimpleChannelInboundHandler<ByteBuf> {
                     client2ProxyServerChannel.pipeline().remove(ConnectDstHandler.class);
                     //入栈信息处理链
                     client2ProxyServerChannel.pipeline().addFirst(new InMsg2Decrypt());//解密
+                    client2ProxyServerChannel.pipeline().addFirst(new InMsgSliceFrameHandler());
+
                     client2ProxyServerChannel.pipeline().addLast(new DirectConnectionHandler(proxy2DstChannel));//写到dst
 
                     client2ProxyServerChannel.writeAndFlush(Unpooled.copiedBuffer(new byte[]{SHAKE_HAND_SUCC})).addListener(new GenericFutureListener<Future<? super Void>>() {

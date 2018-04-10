@@ -6,6 +6,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ReplayingDecoder;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static cn.vonfly.InMsgSliceFrameHandler.FrameState.FRAME_CONTENT;
@@ -41,10 +42,10 @@ public class InMsgSliceFrameHandler extends ReplayingDecoder<InMsgSliceFrameHand
                 if (len < 2 || frameLenByteBuf.writerIndex() == 1) {
                     frameLenByteBuf.writeByte(in.readByte());
                 } else {
-                    frameLength = in.readUnsignedShort();
+                    frameLength = in.readUnsignedShortLE();
                 }
                 if (frameLenByteBuf.writerIndex() == 2) {
-                    frameLength = frameLenByteBuf.readUnsignedShort();
+                    frameLength = frameLenByteBuf.readUnsignedShortLE();
                     frameLenByteBuf.clear();
                 }
                 if (frameLength > 0) {
@@ -65,13 +66,18 @@ public class InMsgSliceFrameHandler extends ReplayingDecoder<InMsgSliceFrameHand
                         state(FRAME_FINISH);
                     }
                 }
-                break;
+                //in.writerIndex() - in.readerIndex()使decode方法不会再被调用,不能使用in.isReadable()，此处会调用ReplayingDecoderByteBuf.isReadable()返回并非预期值
+                if (in.writerIndex() - in.readerIndex() > 0) {
+                    break;
+                }
             }
             case FRAME_FINISH: {
-                frameContentList.add(frameContent);
-                state(FRAME_START);
-                frameLength = -1;
-                if (!in.isReadable()) {
+                if (frameLength == frameContent.writerIndex()) {
+                    frameContentList.add(frameContent);
+                    state(FRAME_START);
+                    frameLength = -1;
+                }
+                if (in.writerIndex() - in.readerIndex() <= 0) {
                     out.addAll(frameContentList);
                     frameContentList.clear();
                 }

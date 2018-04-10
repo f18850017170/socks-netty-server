@@ -2,6 +2,7 @@ package cn.vonfly;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.MessageToByteEncoder;
 
 import java.nio.charset.Charset;
@@ -24,6 +25,14 @@ public class OutMsg2Encrypt extends MessageToByteEncoder<ByteBuf> {
             msg.readBytes(array);
         }
         byte[] encrypt = aesEncrypt.encrypt(key, array);
+        int length = encrypt.length;
+        out.writeShortLE((short)length);
         out.writeBytes(encrypt);
+    }
+
+    @Override
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        super.write(ctx, msg, promise);
+        ctx.flush();
     }
 }
